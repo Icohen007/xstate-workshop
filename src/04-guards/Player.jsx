@@ -1,8 +1,8 @@
-import { createMachine, assign } from 'xstate';
-import { raise } from 'xstate/lib/actions';
-import { useMachine } from '@xstate/react';
-import { useEffect } from 'react';
-import { formatTime } from '../formatTime';
+import {createMachine, assign} from 'xstate';
+import {raise} from 'xstate/lib/actions';
+import {useMachine} from '@xstate/react';
+import {useEffect} from 'react';
+import {formatTime} from '../formatTime';
 
 const playerMachine = createMachine({
   initial: 'loading',
@@ -26,15 +26,19 @@ const playerMachine = createMachine({
     },
     paused: {
       on: {
-        PLAY: { target: 'playing' },
+        PLAY: {target: 'playing'},
       },
     },
     playing: {
       entry: 'playAudio',
       exit: 'pauseAudio',
       on: {
-        PAUSE: { target: 'paused' },
+        PAUSE: {target: 'paused'},
       },
+      always: {
+        cond: (context) => context.elapsed >= context.duration,
+        target: 'paused'
+      }
       // Add an eventless transition here that always goes to 'paused'
       // when `elapsed` value is >= the `duration` value
     },
@@ -54,6 +58,14 @@ const playerMachine = createMachine({
       actions: ['dislikeSong', raise('SKIP')],
     },
     'LIKE.TOGGLE': [
+      {
+        cond: (context) => context.likeStatus === 'liked',
+        actions: [raise('UNLIKE')],
+      },
+      {
+        cond: (context) => context.likeStatus === 'unliked',
+        actions: [raise('LIKE')],
+      }
       // Add two possible transitions here:
       // One that raises UNLIKE if the `likeStatus` is 'liked',
       // and one that raises LIKE if it's 'unliked'.
@@ -61,6 +73,8 @@ const playerMachine = createMachine({
     VOLUME: {
       // Make sure the volume can only be assigned if the level is
       // within range (between 0 and 10)
+      cond: 'volumeChange',
+      // cond: (context) => context.volume > 0 && context.volume < 10,
       actions: 'assignVolume',
     },
     'AUDIO.TIME': {
@@ -94,17 +108,19 @@ const playerMachine = createMachine({
     skipSong: () => {
       console.log('Skipping song');
     },
-    playAudio: () => {},
-    pauseAudio: () => {},
+    playAudio: () => {
+    },
+    pauseAudio: () => {
+    },
   },
   guards: {
-    // Add the guard implementations here, if you'd like
-  },
+    volumeChange: (context, event) => event.level >= 0 && event.level <= 10
+  }
 });
 
 export function Player() {
   const [state, send] = useMachine(playerMachine);
-  const { context } = state;
+  const {context} = state;
 
   useEffect(() => {
     const i = setTimeout(() => {
@@ -124,63 +140,79 @@ export function Player() {
   }, []);
 
   return (
-    <div id="player">
-      <div className="song">
-        <div className="title">{context.title ?? <>&nbsp;</>}</div>
-        <div className="artist">{context.artist ?? <>&nbsp;</>}</div>
-        <input
-          type="range"
-          id="scrubber"
-          min="0"
-          max={context.duration}
-          value={context.elapsed}
-        />
-        <output id="elapsed">
-          {formatTime(context.elapsed - context.duration)}
-        </output>
-      </div>
-      <div className="controls">
-        <button
-          id="button-like"
-          onClick={() => send({ type: 'LIKE.TOGGLE' })}
-          data-like-status={context.likeStatus}
-        ></button>
-        <button
-          id="button-dislike"
-          onClick={() => send({ type: 'DISLIKE' })}
-        ></button>
-        {state.matches('paused') && (
+      <div id="player">
+        <div className="song">
+          <div className="title">{context.title ?? <>&nbsp;</>}</div>
+          <div className="artist">{context.artist ?? <>&nbsp;</>}</div>
+          <input
+              type="range"
+              id="scrubber"
+              min="0"
+              max={context.duration}
+              value={context.elapsed}
+              onChange={(event) => send(
+                  {type: 'AUDIO.TIME', currentTime: event.target.value})}
+
+          />
+          <output id="elapsed">
+            {formatTime(context.elapsed - context.duration)}
+          </output>
+        </div>
+        <div className="controls">
           <button
-            id="button-play"
-            onClick={() => send({ type: 'PLAY' })}
+              id="button-like"
+              onClick={() => send({type: 'LIKE.TOGGLE'})}
+              data-like-status={context.likeStatus}
           ></button>
-        )}
-        {state.matches('playing') && (
           <button
-            id="button-pause"
-            onClick={() => {
-              send({ type: 'PAUSE' });
-            }}
+              id="button-dislike"
+              onClick={() => send({type: 'DISLIKE'})}
           ></button>
-        )}
-        {state.matches('loading') && <button id="button-loading"></button>}
-        <button
-          id="button-skip"
-          onClick={() => send({ type: 'SKIP' })}
-        ></button>
-        <button
-          id="button-volume"
-          data-level={
-            context.volume === 0
-              ? 'zero'
-              : context.volume <= 2
-              ? 'low'
-              : context.volume >= 8
-              ? 'high'
-              : undefined
-          }
-        ></button>
+          {state.matches('paused') && (
+              <button
+                  id="button-play"
+                  onClick={() => send({type: 'PLAY'})}
+              ></button>
+          )}
+          {state.matches('playing') && (
+              <button
+                  id="button-pause"
+                  onClick={() => {
+                    send({type: 'PAUSE'});
+                  }}
+              ></button>
+          )}
+          {state.matches('loading') && <button id="button-loading"></button>}
+          <button
+              id="button-skip"
+              onClick={() => send({type: 'SKIP'})}
+          ></button>
+          <button
+              id="button-volume"
+              data-level={
+                context.volume === 0
+                    ? 'zero'
+                    : context.volume <= 2
+                        ? 'low'
+                        : context.volume >= 8
+                            ? 'high'
+                            : undefined
+              }
+          ></button>
+          <div style={{display: 'flex'}}>
+            <button style={{fontSize: 38}}
+                    onClick={() => send(
+                        {type: 'VOLUME', level: context.volume + 1})}
+            >+
+            </button>
+            <button style={{fontSize: 38}}
+                    onClick={() => send(
+                        {type: 'VOLUME', level: context.volume - 1})}
+            >-
+            </button>
+            <span>{context.volume}</span>
+          </div>
+        </div>
       </div>
-    </div>
   );
 }
