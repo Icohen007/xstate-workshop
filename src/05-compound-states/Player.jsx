@@ -3,6 +3,12 @@ import { raise } from 'xstate/lib/actions';
 import { useMachine } from '@xstate/react';
 import { useEffect } from 'react';
 import { formatTime } from '../formatTime';
+import {inspect} from "@xstate/inspect";
+
+inspect({
+  iframe: false
+})
+
 
 const playerMachine = createMachine({
   initial: 'loading',
@@ -21,32 +27,33 @@ const playerMachine = createMachine({
       on: {
         LOADED: {
           actions: 'assignSongData',
-          // Make this go to a 'ready' state instead
-          target: 'paused',
+          target: 'ready',
         },
       },
     },
-    // Refactor the 'paused' and 'playing' states so that
-    // they are children of the 'ready' state.
-    // Don't forget to add an initial state!
-    paused: {
-      on: {
-        PLAY: { target: 'playing' },
-      },
-    },
-    playing: {
-      entry: 'playAudio',
-      exit: 'pauseAudio',
-      on: {
-        PAUSE: { target: 'paused' },
-      },
-      always: {
-        cond: (ctx) => ctx.elapsed >= ctx.duration,
-        // We changed this to an ID so that it can target
-        // the loading state at any position
-        target: '#loading',
-      },
-    },
+    ready: {
+      initial: 'paused',
+      states: {
+        paused: {
+          on: {
+            PLAY: { target: 'playing' },
+          },
+        },
+        playing: {
+          entry: 'playAudio',
+          exit: 'pauseAudio',
+          on: {
+            PAUSE: { target: 'paused' },
+          },
+          always: {
+            cond: (ctx) => ctx.elapsed >= ctx.duration,
+            // We changed this to an ID so that it can target
+            // the loading state at any position
+            target: '#loading',
+          },
+        },
+      }
+    }
   },
   on: {
     SKIP: {
@@ -108,7 +115,7 @@ const playerMachine = createMachine({
 });
 
 export function Player() {
-  const [state, send] = useMachine(playerMachine);
+  const [state, send] = useMachine(playerMachine, {devTools: true});
   const { context } = state;
 
   useEffect(() => {
