@@ -1,8 +1,13 @@
-import { createMachine, assign } from 'xstate';
-import { raise } from 'xstate/lib/actions';
-import { useMachine } from '@xstate/react';
-import { useEffect } from 'react';
-import { formatTime } from '../formatTime';
+import {createMachine, assign} from 'xstate';
+import {raise} from 'xstate/lib/actions';
+import {useMachine} from '@xstate/react';
+import {useEffect} from 'react';
+import {formatTime} from '../formatTime';
+import {inspect} from "@xstate/inspect";
+
+inspect({
+  iframe: false
+})
 
 const playerMachine = createMachine({
   context: {
@@ -13,86 +18,85 @@ const playerMachine = createMachine({
     likeStatus: 'unliked', // or 'liked' or 'disliked'
     volume: 5,
   },
-
-  // Refactor this so that there are two parallel regions:
-  // 'player' and 'volume'
-  // The resulting state value should look like:
-  // {
-  //   player: 'loading',
-  //   volume: 'muted'
-  // }
   initial: 'loading',
+  type: "parallel",
   states: {
-    // These states should be in a parent 'player' region
-    loading: {
-      id: 'loading',
-      tags: ['loading'],
-      on: {
-        LOADED: {
-          actions: 'assignSongData',
-          target: 'ready',
-        },
-      },
-    },
-    ready: {
-      initial: 'playing',
+    player: {
+      initial: 'loading',
       states: {
-        paused: {
+        loading: {
+          id: 'loading',
+          tags: ['loading'],
           on: {
-            PLAY: { target: 'playing' },
+            LOADED: {
+              actions: 'assignSongData',
+              target: 'ready',
+            },
           },
         },
-        playing: {
-          entry: 'playAudio',
-          exit: 'pauseAudio',
-          on: {
-            PAUSE: { target: 'paused' },
-          },
-          always: {
-            cond: (ctx) => ctx.elapsed >= ctx.duration,
-            target: '#loading',
+        ready: {
+          initial: 'playing',
+          states: {
+            paused: {
+              on: {
+                PLAY: {target: 'playing'},
+              },
+            },
+            playing: {
+              entry: 'playAudio',
+              exit: 'pauseAudio',
+              on: {
+                PAUSE: {target: 'paused'},
+              },
+              always: {
+                cond: (ctx) => ctx.elapsed >= ctx.duration,
+                target: '#loading',
+              },
+            },
           },
         },
       },
-    },
-
-    // These states should be in a parent 'volume' region
-    unmuted: {
       on: {
-        'VOLUME.TOGGLE': 'muted',
-      },
+        SKIP: {
+          actions: 'skipSong',
+          target: '#loading',
+        },
+        LIKE: {
+          actions: 'likeSong',
+        },
+        UNLIKE: {
+          actions: 'unlikeSong',
+        },
+        DISLIKE: {
+          actions: ['dislikeSong', raise('SKIP')],
+        },
+        'AUDIO.TIME': {
+          actions: 'assignTime',
+        },
+      }
     },
-    muted: {
+    volume: {
+      initial: 'unmuted',
+      states: {
+        unmuted: {
+          on: {
+            'VOLUME.TOGGLE': 'muted',
+          },
+        },
+        muted: {
+          on: {
+            'VOLUME.TOGGLE': 'unmuted',
+          },
+        },
+      },
       on: {
-        'VOLUME.TOGGLE': 'unmuted',
-      },
-    },
-  },
-  on: {
-    // These should belong to the 'player' region
-    SKIP: {
-      actions: 'skipSong',
-      target: '#loading',
-    },
-    LIKE: {
-      actions: 'likeSong',
-    },
-    UNLIKE: {
-      actions: 'unlikeSong',
-    },
-    DISLIKE: {
-      actions: ['dislikeSong', raise('SKIP')],
-    },
-    'AUDIO.TIME': {
-      actions: 'assignTime',
-    },
-
-    // This should belong to the 'volume' region
-    VOLUME: {
-      cond: 'volumeWithinRange',
-      actions: 'assignVolume',
-    },
-  },
+        VOLUME: {
+          cond: 'volumeWithinRange',
+          actions: 'assignVolume',
+        },
+      }
+    }
+  }
 }).withConfig({
   actions: {
     assignSongData: assign({
@@ -120,8 +124,10 @@ const playerMachine = createMachine({
     skipSong: () => {
       console.log('Skipping song');
     },
-    playAudio: () => {},
-    pauseAudio: () => {},
+    playAudio: () => {
+    },
+    pauseAudio: () => {
+    },
   },
   guards: {
     volumeWithinRange: (_, e) => {
@@ -131,8 +137,8 @@ const playerMachine = createMachine({
 });
 
 export function Player() {
-  const [state, send] = useMachine(playerMachine);
-  const { context } = state;
+  const [state, send] = useMachine(playerMachine, {devTools: true});
+  const {context} = state;
 
   useEffect(() => {
     const i = setTimeout(() => {
@@ -152,65 +158,66 @@ export function Player() {
   }, []);
 
   return (
-    <div id="player">
-      <div className="song">
-        <div className="title">{context.title ?? <>&nbsp;</>}</div>
-        <div className="artist">{context.artist ?? <>&nbsp;</>}</div>
-        <input
-          type="range"
-          id="scrubber"
-          min="0"
-          max={context.duration}
-          value={context.elapsed}
-        />
-        <output id="elapsed">
-          {formatTime(context.elapsed - context.duration)}
-        </output>
-      </div>
-      <div className="controls">
-        <button
-          id="button-like"
-          onClick={() => send({ type: 'LIKE.TOGGLE' })}
-          data-like-status={context.likeStatus}
-        ></button>
-        <button
-          id="button-dislike"
-          onClick={() => send({ type: 'DISLIKE' })}
-        ></button>
-        {state.can({ type: 'PLAY' }) && (
+      <div id="player">
+        <div className="song">
+          <div className="title">{context.title ?? <>&nbsp;</>}</div>
+          <div className="artist">{context.artist ?? <>&nbsp;</>}</div>
+          <input
+              type="range"
+              id="scrubber"
+              min="0"
+              max={context.duration}
+              value={context.elapsed}
+          />
+          <output id="elapsed">
+            {formatTime(context.elapsed - context.duration)}
+          </output>
+        </div>
+        <div className="controls">
           <button
-            id="button-play"
-            onClick={() => send({ type: 'PLAY' })}
+              id="button-like"
+              onClick={() => send({type: 'LIKE.TOGGLE'})}
+              data-like-status={context.likeStatus}
           ></button>
-        )}
-        {state.can({ type: 'PAUSE' }) && (
           <button
-            id="button-pause"
-            onClick={() => {
-              send({ type: 'PAUSE' });
-            }}
+              id="button-dislike"
+              onClick={() => send({type: 'DISLIKE'})}
           ></button>
-        )}
-        {state.hasTag('loading') && <button id="button-loading"></button>}
-        <button
-          id="button-skip"
-          onClick={() => send({ type: 'SKIP' })}
-        ></button>
-        <button
-          id="button-volume"
-          data-level={
-            context.volume === 0
-              ? 'zero'
-              : context.volume <= 2
-              ? 'low'
-              : context.volume >= 8
-              ? 'high'
-              : undefined
-          }
-          onClick={() => send({ type: 'VOLUME.TOGGLE' })}
-          data-status={state.matches({ volume: 'muted' }) ? 'muted' : undefined}
-        ></button>
+          {state.can({type: 'PLAY'}) && (
+              <button
+                  id="button-play"
+                  onClick={() => send({type: 'PLAY'})}
+              ></button>
+          )}
+          {state.can({type: 'PAUSE'}) && (
+              <button
+                  id="button-pause"
+                  onClick={() => {
+                    send({type: 'PAUSE'});
+                  }}
+              ></button>
+          )}
+          {state.hasTag('loading') && <button id="button-loading"></button>}
+          <button
+              id="button-skip"
+              onClick={() => send({type: 'SKIP'})}
+          ></button>
+          <button
+              id="button-volume"
+              data-level={
+                context.volume === 0
+                    ? 'zero'
+                    : context.volume <= 2
+                        ? 'low'
+                        : context.volume >= 8
+                            ? 'high'
+                            : undefined
+              }
+              onClick={() => send({type: 'VOLUME.TOGGLE'})}
+              data-status={state.matches({volume: 'muted'}) ? 'muted'
+                  : undefined}
+          ></button>
+        </div>
       </div>
-    </div>
   );
 }
