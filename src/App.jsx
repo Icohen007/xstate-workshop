@@ -1,6 +1,6 @@
 import './App.css';
-import { Player } from './00-modeling/Player';
-// import { Player } from './01-states-transitions/Player';
+// import { Player } from './00-modeling/Player';
+import { Player } from './01-states-transitions/Player';
 // import { Player } from './02-actions/Player';
 // import { Player } from './03-context/Player';
 // import { Player } from './04-guards/Player';
