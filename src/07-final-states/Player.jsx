@@ -3,6 +3,11 @@ import { raise } from 'xstate/lib/actions';
 import { useMachine } from '@xstate/react';
 import { useEffect } from 'react';
 import { formatTime } from '../formatTime';
+import {inspect} from "@xstate/inspect";
+
+inspect({
+  iframe: false
+})
 
 const playerMachine = createMachine({
   context: {
@@ -46,12 +51,12 @@ const playerMachine = createMachine({
           },
           always: {
             cond: (ctx) => ctx.elapsed >= ctx.duration,
-            // Instead of going to '#loading', this should go
-            // to a sibling 'finished' state
-            target: '#loading',
+            target: 'finished',
           },
         },
-        // Add a 'finished' final state here
+        finished: {
+          type: "final"
+        }
       },
       onDone: {
         target: '.loading',
@@ -135,7 +140,7 @@ const playerMachine = createMachine({
 });
 
 export function Player() {
-  const [state, send] = useMachine(playerMachine);
+  const [state, send] = useMachine(playerMachine, {devTools: true});
   const { context } = state;
 
   useEffect(() => {
