@@ -10,6 +10,7 @@ const playerMachine = createMachine({
       on: {
         LOADED: {
           // Add an action here to assign the song data
+          actions: 'loadSongData',
           target: 'playing',
         },
       },
@@ -22,6 +23,8 @@ const playerMachine = createMachine({
     playing: {
       // When this state is entered, add an action to play the audio
       // When this state is exited, add an action to pause the audio
+      entry: 'playAudio',
+      exit: 'pauseAudio',
       on: {
         PAUSE: { target: 'paused' },
       },
@@ -31,22 +34,35 @@ const playerMachine = createMachine({
     SKIP: {
       // Add an action to skip the song
       target: 'loading',
+      actions: 'skipSong'
     },
     LIKE: {
       // Add an action to like the song
+      actions: 'likeSong'
     },
     UNLIKE: {
       // Add an action to unlike the song
+      actions: 'unlikeSong'
     },
     DISLIKE: {
       // Add two actions to dislike the song and raise the skip event
+      actions: ['dislikeSong', raise('SKIP')]
     },
     VOLUME: {
       // Add an action to assign to the volume
+      actions: 'assignVolume'
     },
   },
 }).withConfig({
   actions: {
+    loadSongData: () => { console.log('loadSongData')},
+    playAudio: () => { console.log('playAudio')},
+    pauseAudio: () => { console.log('pauseAudio')},
+    skipSong: () => { console.log('skipSong')},
+    likeSong: () => { console.log('likeSong')},
+    unlikeSong: () => { console.log('unlikeSong')},
+    dislikeSong: () => { console.log('dislikeSong')},
+    assignVolume: () => { console.log('assignVolume')},
     // Add implementations for the actions here, if you'd like
     // For now you can just console.log something
   },
@@ -65,7 +81,7 @@ export function Player() {
     };
   }, []);
 
-  console.log(state.actions);
+  // console.log(state.actions);
 
   return (
     <div id="player">
@@ -107,7 +123,7 @@ export function Player() {
           id="button-skip"
           onClick={() => send({ type: 'SKIP' })}
         ></button>
-        <button id="button-volume"></button>
+        <button id="button-volume" onClick={() => send({ type: 'VOLUME' })}></button>
       </div>
     </div>
   );
